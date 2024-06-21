@@ -1,29 +1,46 @@
 import pandas as pd
-import sys
-import locale
-from tabulate import tabulate
+import numpy as np
+import json,sys
 
 def read_csv(csv_path):
     df = pd.read_csv(csv_path)
     return df
 
-def display_optimal_cost(optimal_cost,wage_per_min,wage_per_hour):
-    print("Wages/Hour: ",locale.currency(wage_per_hour))
-    print("Wages/min: ",locale.currency(wage_per_min))
-    print(tabulate(optimal_cost.values.tolist(),headers=optimal_cost.columns,tablefmt="grid"))
+def read_json(json_path):
+    with open(json_path,"r") as file:
+        data = json.load(file)
+    return data
 
-def calc_optimal_cost(transport_prices,wage_per_hour):
-    wage_per_min = round(wage_per_hour/60,2)
-    transport_prices["TotalCost"] = transport_prices["Time(mins)"] * wage_per_min + transport_prices["Price(₹)"]
-    transport_prices.sort_values(by="TotalCost",ascending=True,inplace=True,ignore_index=True)
-    return transport_prices,wage_per_min
+def display_optimal_cost(df):
+    print(df)
+
+def calc_total_cost(row,wage):
+    return (wage/60)*row["Time(mins)"]+ row["Price(₹)"]
+
+def get_fare_details(transport_fares,employee_wages):
+    hourly_wages = employee_wages["hourly_wage(₹)"].tolist()
+    min_list,max_list=[],[]
+    for wage in hourly_wages:
+        transport_fares["total_cost"] = transport_fares.apply(calc_total_cost,axis=1,args=(wage,))
+        min_list.append(transport_fares["total_cost"].min())
+        max_list.append(transport_fares["total_cost"].max())
+    fare_details =  {
+        "min":min_list,
+        "max":max_list}
+    return fare_details
+
+def calc_optimal_cost(transport_fares,employee_wages):
+    fare_details = get_fare_details(transport_fares,employee_wages)
+    employee_wages["min"] = fare_details["min"]
+    employee_wages["max"] = fare_details["max"]
+    return employee_wages
 
 def main():
-    csv_path = sys.argv[1]
-    wage_per_hour = int(sys.argv[2])
-    locale.setlocale(locale.LC_ALL, 'en_IN')
-    transport_prices = read_csv(csv_path)
-    optimal_cost,wage_per_min = calc_optimal_cost(transport_prices,wage_per_hour)
-    display_optimal_cost(optimal_cost,wage_per_min,wage_per_hour)
-    
+    file_paths = read_json("config.json")
+    employee_wages = read_csv(file_paths["employee_wages_path"])
+    transport_fares = read_csv(file_paths["transport_fares_path"])
+    employee_wages_df = calc_optimal_cost(transport_fares,employee_wages)
+    display_optimal_cost(employee_wages_df)
+
 main()
+
